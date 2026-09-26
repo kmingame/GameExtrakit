@@ -1,0 +1,20 @@
+{
+  "contract_version": "0.1.0",
+  "godot_tested": "4.7.stable.official.5b4e0cb0f",
+  "android": {
+    "repository": "https://github.com/godot-sdk-integrations/godot-play-game-services",
+    "source_commit": "e38b618578572b558691c4f476f70f5e142226ce",
+    "release_reference": "v3.4.0",
+    "artifact_sha256": null,
+    "binary_source_correspondence_verified": false,
+    "device_tested": false
+  },
+  "apple": {
+    "repository": "https://github.com/migueldeicaza/GodotApplePlugins",
+    "source_commit": "a2ae65df061c80d66420e23572300cc9ffcedb7c",
+    "components": ["GodotGameCenter", "SwiftGodotRuntime"],
+    "artifact_sha256": null,
+    "binary_source_correspondence_verified": false,
+    "device_tested": false
+  }
+}
