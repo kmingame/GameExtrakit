@@ -1,0 +1,5 @@
+.godot/
+dist/
+*.tmp
+export_credentials.cfg
+test-results/
