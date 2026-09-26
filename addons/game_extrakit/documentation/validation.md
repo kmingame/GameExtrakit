@@ -1,5 +1,7 @@
 # Validación del 26 de septiembre de 2026
 
+[Manual](README.md) · [Cobertura](coverage.md) · [Desarrollo y comandos](development.md#ejecutar-validación-local) · [Diagnóstico](troubleshooting.md)
+
 Motor ejecutado: `4.7.stable.official.5b4e0cb0f` (Windows x86_64).
 Renderer de la demo: Compatibility/OpenGL 3.3, GTX 1660.
 
@@ -28,10 +30,13 @@ puede imprimir después de cerrar su propio archivo de log. La salida queda bajo
 
 ## Pendiente antes de aceptación nativa
 
+La ampliación del manual no modifica este estado de aceptación: las comprobaciones
+documentales se registran al final y no sustituyen pruebas de SDKs en dispositivos.
+
 No se instalaron/compilaron binarios PGS o Apple ni se firmaron paquetes móviles.
 No se realizó una prueba Android/iOS, se cambió una consola remota o se llamó a un
 backend real. Los checksums de dependencias y su correspondencia con las fuentes
-siguen pendientes en `dependencies.lock.json`.
+siguen pendientes en el [lock de dependencias](../dependencies.lock.json).
 
 1. Fijar los artefactos exactos y SHA-256; probar editor y plantillas 4.7 coincidentes.
 2. Android: plugin único y ambos paquetes instalados; autenticar, cancelar, reconectar,
@@ -68,3 +73,25 @@ tipos de evento y motivos de pausa. Nunca códigos OAuth, perfiles o partidas.
 Completar un registro por combinación de dispositivo, Android, Godot, distribución y
 versión de dependencia. Aunque un fallback funcione en esos equipos, seguirá siendo
 detección de interrupción genérica. No ampliar el wrapper ni agregar SDKs para esta prueba.
+
+## Revisión documental
+
+La revisión del 26 de septiembre de 2026 mantuvo los README como entradas breves y
+organizó el manual en 16 páginas relacionadas. Se contrastaron con el código:
+
+- Los 40 métodos públicos y 9 señales de la fachada.
+- Los 47 campos de los cuatro Resources de configuración, incluidos valores iniciales.
+- Los 100 campos de GEXResult y modelos de GEXTypes, con sus valores opcionales.
+- Los códigos de error del runtime, límites de plataforma y cobertura de los 25 objetivos.
+- Los enlaces locales y anclas del manual y ambos README, sin destinos rotos.
+
+Se extrajeron 25 bloques GDScript a un proyecto aislado con el addon y su autoload.
+Godot 4.7 importó el proyecto y analizó/cargó todos los scripts sin errores de sintaxis.
+**No se ejecutaron las operaciones de esos ejemplos contra proveedores ni backend**;
+esta comprobación acredita sintaxis y resolución de tipos, no aceptación nativa.
+
+El inventario y la evidencia local quedaron en
+`test-results/documentation-audit.json` y `test-results/documentation-examples.log`
+del proyecto de desarrollo. Estos archivos temporales no forman parte del ZIP.
+Los comandos de validación funcional existentes siguen documentados en
+[Desarrollo](development.md#ejecutar-validación-local).

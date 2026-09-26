@@ -9,7 +9,11 @@ las dos bibliotecas seleccionadas.
 
 La implementación se encuentra en `addons/game_extrakit`. Las propuestas de este
 documento se conservan como diseño de referencia; el contrato materializado, su
-cobertura y las pruebas están en `README.md` y `addons/game_extrakit/documentation/`.
+cobertura y las pruebas están en el [README](README.md) y el
+[manual enlazado](addons/game_extrakit/documentation/README.md). Para integrar la
+versión entregada consulta la [API vigente](addons/game_extrakit/documentation/api.md),
+la [configuración completa](addons/game_extrakit/documentation/configuration.md) y la
+[matriz de cobertura](addons/game_extrakit/documentation/coverage.md).
 
 ## 1. Propósito y acuerdos
 

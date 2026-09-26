@@ -1,66 +1,37 @@
 # GameExtrakit 0.1.0
 
-Addon de servicios de juegos para **Godot 4.7**, implementado a partir de
-[`plugindev.md`](plugindev.md). Ofrece la fachada `GameServices`, recursos de
-configuración, dock del editor, adaptadores Android/iOS, simulador y un laboratorio
-de integración.
+Addon para **Godot 4.7** que unifica servicios de Google Play Games y Apple Game Center mediante el autoload `GameServices`.
 
-**Estado:** implementación inicial comprobada en Godot `4.7.stable.official.5b4e0cb0f`
-en Windows. Las pruebas locales usan simulación y dobles de los bindings. La ejecución
-de PGS/Game Center, exportación firmada, iCloud, Sidekick y el backend real todavía
-requieren sus entornos de plataforma. No se afirma aceptación completa en dispositivos.
+| Función | Incluye |
+|---|---|
+| Jugadores | Autenticación, perfil, prueba de identidad y amigos |
+| Logros | Definiciones, progreso, desbloqueo y pantalla nativa |
+| Rankings | Envío de puntuaciones, score propio, top, cercanos y filtros |
+| Partidas | Guardar, cargar, enumerar, eliminar y detectar conflictos |
+| Integración | Dock de configuración, capacidades, UI nativa y pausa |
+| Desarrollo | Simulador en memoria, laboratorio y pruebas de contrato |
 
-## Instalación
+**Estado:** comprobado localmente con Godot `4.7.stable.official.5b4e0cb0f`. La validación en dispositivos y del backend real sigue pendiente. Android no confirma el commit de guardado, no resuelve conflictos manualmente y no observa Sidekick. Consulta la [cobertura por plataforma](addons/game_extrakit/documentation/coverage.md).
 
-1. Copia `addons/game_extrakit` a `res://addons/game_extrakit` en tu juego, o instala
-   el ZIP de `dist` desde la opción de importar paquetes de Godot.
-2. Activa **GameExtrakit** en Proyecto → Ajustes del proyecto → Plugins. Esto registra
-   el dock y el autoload `GameServices`. Si ese nombre ya existe, resuelve la colisión
-   antes de continuar; el addon no lo sustituye.
-3. En el dock, crea una configuración, edita módulos, plataformas y catálogos, y
-   guárdala como `.tres`. El campo `game_extrakit/config_path` guarda la ruta seleccionada.
-4. Para escritorio activa explícitamente **Mock Enabled**. Para dispositivos instala
-   la dependencia oficial correspondiente y sigue la [guía de plataformas](addons/game_extrakit/documentation/platforms.md).
+## Inicio rápido
 
-El ZIP contiene el addon; no incluye los binarios de terceros ni sus SDKs. Desactivar
-un proveedor impide usarlo en runtime, pero sus binarios los administra su exportador.
+1. Copia `addons/game_extrakit` al proyecto o importa el ZIP de `dist`.
+2. Activa **GameExtrakit** en Proyecto → Ajustes del proyecto → Plugins.
+3. En el dock crea una configuración, activa **Mock Enabled** para probar en escritorio y guarda el Resource.
+4. Llama a `await GameServices.authenticate()` desde el juego y comprueba su resultado.
 
-## Uso
+Los binarios de terceros se instalan por separado. Sigue [Primeros pasos](addons/game_extrakit/documentation/getting-started.md) para el ejemplo completo y [Plataformas](addons/game_extrakit/documentation/platforms.md) para Android/iOS.
 
-```gdscript
-func _ready() -> void:
-    # La configuración seleccionada en el dock se carga sin abrir UI de autenticación.
-    var auth := await GameServices.authenticate()
-    if not auth.is_ok():
-        return
+## Documentación
 
-    var achievement := await GameServices.unlock_achievement("primera_victoria")
-    var score := await GameServices.submit_score("mejor_puntuacion", 12345)
-    var saved := await GameServices.save_game("principal", PackedByteArray([1, 2, 3]))
-    if saved.status == GEXTypes.Status.UNKNOWN:
-        # Conserva el respaldo del juego; no reintentes automáticamente.
-        print("No se puede confirmar la escritura: ", saved.error_code)
-```
+El [índice del manual](addons/game_extrakit/documentation/README.md) enlaza todas las guías y propone recorridos según la tarea.
 
-Las claves deben existir en el catálogo. El juego decide la serialización de su partida.
-`save_game` recibe bytes opacos y `load_game` no crea un slot ausente.
+- [Configuración y editor](addons/game_extrakit/documentation/configuration.md): todas las opciones, valores por defecto y catálogos.
+- [API](addons/game_extrakit/documentation/api.md) y [modelos/resultados](addons/game_extrakit/documentation/results.md): métodos, señales y contratos.
+- [Servicios y ejemplos](addons/game_extrakit/documentation/services.md), [partidas y conflictos](addons/game_extrakit/documentation/cloud-save.md), [identidad/backend](addons/game_extrakit/documentation/identity.md).
+- [UI nativa y pausa](addons/game_extrakit/documentation/native-ui.md), [sesiones y concurrencia](addons/game_extrakit/documentation/lifecycle.md).
+- [Simulador y demo](addons/game_extrakit/documentation/simulator.md), [diagnóstico](addons/game_extrakit/documentation/troubleshooting.md), [validación](addons/game_extrakit/documentation/validation.md).
+- [Desarrollo, pruebas y empaquetado](addons/game_extrakit/documentation/development.md).
 
-## Contenido
+La especificación original está en [plugindev.md](plugindev.md); el manual describe el comportamiento implementado. Licencia [MIT](addons/game_extrakit/LICENSE) y [avisos de terceros](addons/game_extrakit/THIRD_PARTY_NOTICES.md).
 
-- [API, resultados y concurrencia](addons/game_extrakit/documentation/api.md).
-- [Instalación Android/iOS y exportación](addons/game_extrakit/documentation/platforms.md).
-- [Verificador de identidad opcional](addons/game_extrakit/documentation/identity.md).
-- [Cobertura de los 25 puntos](addons/game_extrakit/documentation/coverage.md).
-- [Validación ejecutada y pruebas de dispositivo](addons/game_extrakit/documentation/validation.md).
-- `demo/service_lab.tscn`: ejecutar con F6, o F5 desde este proyecto.
-
-## Validación y empaquetado
-
-```powershell
-.\tools\validate.ps1 -Godot 'D:\apps\Godot\Godot_v4.7-stable_win64_console.exe'
-.\tools\package.ps1
-```
-
-La validación falla si hay errores en los logs, además de comprobar códigos de salida.
-El ZIP tiene orden y timestamps fijos y un SHA-256 al lado. El paquete es reproducible
-para el mismo contenido y entorno de compresión. Conserva los `.gd.uid` en el proyecto.

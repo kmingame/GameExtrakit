@@ -1,138 +1,161 @@
-# Contrato 0.1
+# Referencia de API
 
-`GameServices` es el autoload; `GEXGameServices` permite instancias controladas por el
-juego. Para estas últimas, asigna `auto_initialize = false` **antes** de agregarlas al
-árbol y llama a `initialize(config)`. Inicializar prepara la dependencia sin abrir el
-inicio de sesión. Se selecciona el proveedor una vez por ciclo de vida. Tras `shutdown`,
-crea una instancia nueva. En Android solo puede haber un propietario del singleton nativo.
+[Manual](README.md) · [Modelos y resultados](results.md) · [Ejemplos de servicios](services.md) · [Ciclo de vida](lifecycle.md)
 
-Las operaciones se pueden esperar con `await`, aunque ciertos errores locales se
-resuelven inmediatamente. No hagas llamadas paralelas a los clientes de la dependencia
-por fuera de GameExtrakit: romperían la correlación de sus señales compartidas.
+La fachada es [GEXGameServices](../runtime/game_services.gd), instalada normalmente como autoload `GameServices`. Todos los métodos operativos que devuelven `GEXResult` se invocan con `await`, salvo `initialize()`, que es síncrono. Un rechazo local puede completarse inmediatamente.
 
-## API pública
+Los nombres de los tipos de datos pertenecen a `GEXTypes`. Las tablas indican el dato principal de una respuesta válida; no prometen que todos los campos opcionales estén poblados por todos los proveedores.
 
-| Área | Métodos |
+## Reglas comunes
+
+- Inicialización, módulo y sesión son requisitos previos; autenticación/refresco no exigen sesión previa.
+- Los IDs que recibe el juego son claves de catálogo salvo donde se indique ID nativo.
+- Consulta `status`/`is_ok()` antes de usar datos y revisa `delivery`, `completeness` o `*_known` cuando correspondan.
+- Los argumentos pueden rechazarse antes de comprobar disponibilidad: el primer error observado no es un inventario de todos los problemas.
+- Las operaciones nativas pasan por una cola global. No emitas solicitudes directamente a la dependencia móvil mientras uses esta fachada.
+- No hay logout común, paginación común ni reintentos automáticos.
+
+## Inicialización y observación
+
+| Firma | Retorno y comportamiento |
 |---|---|
-| Inicio | `initialize(config)`, `get_provider()`, `get_capabilities()` |
-| Sesión | `authenticate()`, `refresh_auth_state()`, `get_auth_state()`, `get_player()` |
-| Identidad | `get_identity_proof()`, `verify_player_identity()`, `set_identity_verifier(node)` |
-| Amigos | `list_friends(limit=25, ask_permission=false, force_refresh=false)` |
-| Logros | `unlock_achievement(key)`, `set_achievement_progress(key, progress)`, `list_achievement_definitions(force_refresh=false)`, `list_player_achievements(force_refresh=false)` |
-| Rankings | `list_leaderboards(force_refresh=false)`, `submit_score(key, int64)`, `get_player_score(key, query=null)`, `get_top_scores(key, query=null)`, `get_scores_around_player(key, query=null)` |
-| Partidas | `save_game(slot, bytes, description="", played_msec=0, progress_value=0)`, `load_game(slot)`, `list_saved_games(force_refresh=false)`, `delete_saved_game(slot)`, `resolve_save_conflict(token, bytes)` |
-| UI nativa | `show_achievements()`, `show_leaderboards()`, `show_leaderboard(key, query=null)`, `show_platform_overlay()`, `show_native_destination(destination, key_or_id="")` |
-| Access point | `set_platform_entry_point_visible(enabled)`, `set_platform_entry_point_location(location)` |
-| Observación | `get_native_ui_capabilities()`, `get_native_ui_state()`, `get_interruption_state()` |
-| Ciclo de vida | `cancel_pending_requests()`, `shutdown()`, `set_pause_token(token, enabled)`, `take_pending_activities()` |
-| Desarrollo | `get_simulator()` devuelve `GEXMockAdapter` únicamente en simulación |
+| `initialize(config: GEXConfig) -> GEXResult` | Valida, duplica configuración y prepara un proveedor; no autentica. La instancia debe estar en el árbol |
+| `get_provider() -> GEXTypes.Provider` | Proveedor seleccionado o NONE |
+| `get_auth_state() -> GEXTypes.AuthState` | Último estado observado; no consulta la red |
+| `get_capabilities() -> GEXTypes.Capabilities` | Capacidades, módulos, sesión y limitaciones actuales |
+| `get_native_ui_capabilities() -> GEXTypes.Capabilities` | Alias de `get_capabilities()`, no un modelo distinto |
+| `get_native_ui_state() -> GEXTypes.NativeUiState` | Lectura de presentación y access point cuando existen |
+| `get_interruption_state() -> GEXTypes.InterruptionState` | Snapshot de motivos y estados de interrupción |
 
-No hay logout universal. `refresh_auth_state` conserva el comportamiento nativo: la
-comprobación PGS puede mostrar su popup; no se promete una comprobación silenciosa idéntica.
+`auto_initialize: bool = true` carga el Resource de `game_extrakit/config_path` en `_ready()`. Para administración manual asígnalo a `false` **antes** de añadir el nodo al árbol. Una inicialización repetida sobre una instancia ya preparada devuelve OK sin aplicar la nueva configuración. Tras el cierre crea otra instancia; consulta [Ciclo de vida](lifecycle.md).
 
-## Resultados y datos
+## Autenticación, perfil e identidad
 
-`GEXResult` contiene `request_id`, `operation`, `provider`, `status`, `error_code`,
-`message`, `native_code`, `delivery` y campos tipados opcionales. No expone objetos
-GameKit ni diccionarios de PGS. Los perfiles, estados, entradas, metadatos, capacidades
-y conflictos están definidos en `GEXTypes`.
+Módulo `identity`.
 
-| Estado | Significado |
+| Firma | Datos y condiciones |
 |---|---|
-| `OK` | Operación completada según el contrato específico; abrir UI significa solicitud enviada |
-| `FAILED` | Fallo conocido o validación rechazada |
-| `CANCELLED` | Espera local cancelada o sesión invalidada |
-| `UNSUPPORTED` | Operación/plataforma sin soporte |
-| `UNKNOWN` | La evidencia no distingue éxito y fallo; no equivale a un fallo reintentable |
+| `authenticate() -> GEXResult` | Solicita autenticación; `player` si existe sesión. Las llamadas simultáneas se agrupan |
+| `refresh_auth_state() -> GEXResult` | Reconsulta la sesión. Puede devolver OK y `player=null`, pasando a UNAUTHENTICATED |
+| `get_player() -> GEXResult` | Exige sesión observada autenticada; devuelve `player` y actualiza el estado local |
+| `get_identity_proof() -> GEXResult` | Devuelve `proof`; en Android exige `android_server_client_id` |
+| `set_identity_verifier(verifier: GEXIdentityVerifier) -> void` | Inyecta un Node propiedad del juego, ya dentro del árbol; no lo autentica ni lo libera |
+| `verify_player_identity() -> GEXResult` | Obtiene prueba y llama al verificador; `verified_player_id` es el ID del backend |
 
-`is_ok()` solo devuelve true para `OK`. Guardados Apple aceptados usan
-`delivery=PROVIDER_ACCEPTED`; ningún adaptador declara `SYNC_CONFIRMED` sin evidencia.
-PGS conserva `status=UNKNOWN` y `delivery=UNKNOWN` al recibir `gameSaved(true, ...)`.
+El verificador HTTP opcional se crea desde `identity_verifier_url` cuando no se inyectó uno antes de inicializar. Sin verificador válido: `BACKEND_NOT_CONFIGURED`. La verificación conserva el ID de solicitud de la prueba; no emite un segundo `operation_completed` para la respuesta HTTP. Espera su retorno directamente.
 
-Los IDs son opacos. Un `PlayerProfile.id` Apple es `gamePlayerID`; la prueba de
-identidad usa `teamPlayerID` por separado. No cruces identidades de ambos proveedores.
-No registres pruebas de identidad, firmas, códigos OAuth ni bytes de partidas.
+[Ejemplos de sesión](services.md#autenticacion-y-perfil) · [Contrato de identidad y backend](identity.md).
 
-## Consultas y límites adoptados
+## Amigos
 
-`GEXQuery` es un Resource con `scope=GLOBAL/FRIENDS`,
-`period=DAILY/WEEKLY/ALL_TIME`, `limit=1..25`, `force_refresh`. Los enums se traducen
-explícitamente a cada binding. Los calendarios son nativos y no son temporadas comunes.
-Apple no ofrece equivalente para `force_refresh`; se conserva como preferencia sin
-promesa de frescura. La consulta cercana Apple usa hasta dos lecturas y no es atómica.
+Módulo `friends`.
 
-Amigos solicita 1..200 entradas como límite de la API del addon. PGS devuelve una página
-sin continuación ni prueba de completitud; su lista vacía puede ocultar un error y
-se marca `UNKNOWN`. Apple devuelve los amigos autorizados y recorta al límite pedido,
-marcando `PARTIAL` si corresponde. Esto no representa todos los contactos del usuario.
+`list_friends(limit: int = 25, ask_permission: bool = false, force_refresh: bool = false) -> GEXResult`
 
-Progreso: número finito entre 0 y 1. PGS incremental usa pasos absolutos
-`floor(progress * total_steps)`, nunca incrementos relativos; cero no se envía.
-Se contrastan tipo/pasos con metadatos PGS antes de mutar. `achievementUnlocked(false)`
-es ambiguo para progresivos. Un logro PGS normal no admite progreso parcial.
-Apple usa porcentaje absoluto y conserva la monotonicidad de GameKit.
+Devuelve `friends: Array[PlayerProfile]` y `completeness`. El límite de la API es 1–200; no hay cursor para la página siguiente. `ask_permission=true` permite el flujo nativo de autorización desde una acción del usuario. Apple consulta primero autorización y puede devolver `PERMISSION_REQUIRED` o `PERMISSION_DENIED`.
 
-Slots: 1..100 caracteres ASCII `[A-Za-z0-9._~-]`, incluyendo prefijo. Presupuesto
-de aplicación predeterminado: 1 MiB, configurable hasta 3 MiB. No se presenta como
-garantía de cuota Apple. Descripción: presupuesto conservador de 500 bytes UTF-8.
-Se aceptan bytes vacíos. `delete_saved_game` Apple elimina todas las versiones con
-ese nombre; Android resuelve primero el `snapshotId` a partir del slot.
+Android no garantiza completitud y considera vacío/null ambiguo. Apple puede devolver vacío válido y COMPLETE, o PARTIAL si recorta la lista. [Ejemplo y significado](services.md#amigos).
 
-El juego conserva su respaldo local y decide cuándo reemplazarlo. GameExtrakit no
-impone formato, fusión, reintentos ni sincronización entre proveedores.
+## Logros
 
-## Solicitudes y sesiones
+Módulo `achievements`.
 
-FIFO global: serializa mutaciones, consultas de mismo leaderboard/períodos diferentes
-y operaciones compuestas. Cada espera nativa tiene timeout en tiempo real y continúa
-procesándose durante pausa. No se reintentan mutaciones automáticamente.
+| Firma | Datos y condiciones |
+|---|---|
+| `unlock_achievement(key: String) -> GEXResult` | Equivale a progreso 1; la operación registrada es `set_achievement_progress` |
+| `set_achievement_progress(key: String, progress: float) -> GEXResult` | Clave configurada; valor absoluto finito 0–1. No promete devolver el estado actualizado |
+| `list_achievement_definitions(force_refresh: bool = false) -> GEXResult` | `achievement_definitions`; Android/mock también pueden incluir `achievements` |
+| `list_player_achievements(force_refresh: bool = false) -> GEXResult` | `achievements`; puede incluir las definiciones utilizadas para construir el resultado |
 
-Android mantiene un canal bloqueado después de timeout/cancelación hasta que drena la
-respuesta original. Devuelve `REQUEST_CHANNEL_BUSY` mientras tanto. Si se destruye
-el adaptador con canales pendientes, se bloquean para el resto del proceso: reiniciar
-la app es la única manera segura de iniciar otra época nativa sin IDs de correlación.
+En PGS normal solo se admite 0/1; incremental convierte a pasos absolutos. En Apple se reporta porcentaje. `force_refresh` no tiene equivalente en Apple. La lista puede contener elementos remotos sin clave local; no pases una clave vacía a las mutaciones. [Progreso y ejemplos](services.md#logros).
 
-Cambiar de jugador incrementa la generación, cancela solicitudes y caduca conflictos.
-Se revalida identidad antes y después de las operaciones nativas y al reanudar. Esto
-descarta datos cruzados observables; no puede cancelar efectos remotos que el SDK ya
-inició durante un cambio de cuenta. La cancelación de una mutación en vuelo es `UNKNOWN`.
+## Rankings
 
-Errores adicionales: `NOT_INITIALIZED`, `FEATURE_DISABLED`, `DEPENDENCY_MISSING`,
-`INVALID_CONFIGURATION`, `INVALID_ARGUMENT`, `NOT_AUTHENTICATED`, `AUTHENTICATION_FAILED`,
-`PERMISSION_REQUIRED`, `PERMISSION_DENIED`, `USER_CANCELLED`, `NETWORK_UNAVAILABLE`,
-`TIMEOUT`, `PROVIDER_ERROR`, `SAVE_NOT_FOUND`, `CONFLICT_PENDING`, `CONFLICT_EXPIRED`,
-`BACKEND_NOT_CONFIGURED`, `IDENTITY_VERIFICATION_FAILED`, `SESSION_CHANGED`,
-`AMBIGUOUS_NATIVE_RESULT`, `SAVE_COMPLETION_UNVERIFIABLE`, `UI_PRESENTATION_UNOBSERVABLE`.
+Módulo `leaderboards`. `key` debe existir en `GEXConfig.leaderboards`; `query=null` usa el valor del catálogo o [GEXQuery por defecto](configuration.md#consultas-gexquery).
 
-## UI e interrupciones
+| Firma | Datos y condiciones |
+|---|---|
+| `list_leaderboards(force_refresh: bool = false) -> GEXResult` | `leaderboards: Array[LeaderboardInfo]` |
+| `submit_score(key: String, score: int) -> GEXResult` | Entero GDScript de 64 bits. OK no implica nuevo récord ni un rank concreto |
+| `get_player_score(key: String, query: GEXQuery = null) -> GEXResult` | `own_entry` opcional; no debe leerse como puntuación cero cuando es null |
+| `get_top_scores(key: String, query: GEXQuery = null) -> GEXResult` | `entries`, `query` y metadatos disponibles |
+| `get_scores_around_player(key: String, query: GEXQuery = null) -> GEXResult` | `entries`, `own_entry` opcional, `centered_known`, `centered_on_player`, `query` |
 
-Apple consulta `is_presenting_game_center` cada 250 ms mientras el adaptador está
-activo, incluso con gameplay pausado o acceso oculto. `active`, `visible` y
-presentación son estados diferentes. PGS no ofrece estado de Sidekick: permanece
-`UNKNOWN` aunque el motor recupere foco.
+Las consultas limitan resultados a 1–25. `rank` viene del proveedor, no del índice local. `total_count=-1` significa desconocido; no lo sustituyas por el tamaño de página. Apple puede devolver OK sin puntuación propia; PGS null es ambiguo. [Consultas, periodos y ejemplos](services.md#rankings).
 
-Destinos comunes: `overlay`, `achievements`, `leaderboards`, `leaderboard`.
-Apple añade `profile`, `friends`; desde iOS 18: `achievement`, `leaderboard_set`;
-desde iOS 26: `challenges`, `challenge`, `friending`, `play_together`, `activity`.
-La lista se filtra por versión y módulos. Consultarla no implica que el usuario esté
-autenticado. El método valida la sesión antes de presentar. `activity` y `challenge`
-reciben IDs de definiciones ya creadas; no administran retos ni actividades remotas.
+## Partidas
 
-Por defecto se emiten motivos y el gestor del juego decide la pausa. Si se activa
-`manage_scene_tree_pause`, **todas las nuevas pausas del juego deben usar tokens**:
+Módulo `cloud_save`. Slots y bytes se validan antes del envío.
+
+| Firma | Datos y condiciones |
+|---|---|
+| `save_game(slot: String, data: PackedByteArray, description: String = "", played_msec: int = 0, progress_value: int = 0) -> GEXResult` | Guarda bytes opacos; `delivery` y, si existen, `saves`. Descripción <=500 bytes UTF-8; metadatos numéricos no negativos |
+| `load_game(slot: String) -> GEXResult` | `bytes`, metadatos opcionales; slot ausente devuelve SAVE_NOT_FOUND, no crea uno |
+| `list_saved_games(force_refresh: bool = false) -> GEXResult` | `saves` del prefijo y `completeness`. No descarga contenido de cada partida |
+| `delete_saved_game(slot: String) -> GEXResult` | Android resuelve snapshotId; Apple elimina todas las versiones del nombre |
+| `resolve_save_conflict(token: String, data: PackedByteArray) -> GEXResult` | Resolución explícita con bytes elegidos por el juego; token no vacío y vigente. Android: UNSUPPORTED_OPERATION |
+
+El presupuesto de `max_save_bytes` también se aplica a la resolución. No hay serialización, cifrado, backup o fusión incorporados. Una lista Apple obtenida durante `load_game` puede incluir metadatos de otros slots del mismo prefijo; usa `metadata.slot`, no la posición de la lista. [Guía completa](cloud-save.md).
+
+## Interfaces nativas
+
+Exigen sesión. Los métodos de logros/rankings exigen sus módulos; los de overlay, access point y destinos generales exigen `identity`.
+
+| Firma | Comportamiento |
+|---|---|
+| `show_achievements() -> GEXResult` | Solicita pantalla nativa de logros |
+| `show_leaderboards() -> GEXResult` | Solicita lista nativa de rankings |
+| `show_leaderboard(key: String, query: GEXQuery = null) -> GEXResult` | Abre ranking concreto con scope/period; `limit` no fija el tamaño de UI nativa |
+| `show_platform_overlay() -> GEXResult` | Solicita overlay general Apple/mock; Android no soportado |
+| `set_platform_entry_point_visible(enabled: bool) -> GEXResult` | Cambia estado activo solicitado; no garantiza visibilidad ni cierra una presentación |
+| `set_platform_entry_point_location(location: int) -> GEXResult` | Ubicación 0–3; Android no soportado |
+| `show_native_destination(destination: String, key_or_id: String = "") -> GEXResult` | Destino opcional por plataforma/versión |
+
+Para `achievement` y `leaderboard`, el segundo argumento es clave local; para `leaderboard_set`, `challenge` y `activity` es ID nativo de definición. Los demás destinos no requieren identificador. Consulta la [matriz de destinos y ejemplos](native-ui.md).
+
+El resultado de abrir UI no representa su cierre. Android devuelve UNKNOWN; Apple iOS 17 puede devolver UNKNOWN/UI_DISPATCHED para un ranking específico. Observa estado donde esté disponible.
+
+## Ciclo de vida y desarrollo
+
+| Firma | Comportamiento |
+|---|---|
+| `set_pause_token(token: String, enabled: bool) -> void` | Activa/libera motivo con nombre; vacío se ignora, repetir el mismo token es idempotente |
+| `take_pending_activities() -> Array[GEXTypes.NativeActivity]` | Devuelve y vacía la cola de actividades, máximo 32 |
+| `cancel_pending_requests() -> void` | Cancela esperas locales, cambia generación e invalida conflictos; no cancela efectos remotos |
+| `shutdown() -> void` | Detiene observación, cancela, desconecta proveedor y libera la pausa propia; no elimina el Node ni cierra sesión nativa |
+| `get_simulator() -> GEXMockAdapter` | Adaptador de simulación o null; comprobar antes de usar sus controles |
+
+[Sesiones y cierre](lifecycle.md) · [Pausa y actividades](native-ui.md) · [Controles del simulador](simulator.md).
+
+## Señales públicas
+
+Conecta las señales antes de iniciar las operaciones que quieras observar. No hay reproducción automática del último valor al conectar: consulta los getters para el estado inicial.
+
+| Señal | Cuándo y cómo utilizarla |
+|---|---|
+| `auth_state_changed(state: GEXTypes.AuthState)` | Cambio efectivo de estado de sesión; actualizar disponibilidad de UI |
+| `player_changed(player: GEXTypes.PlayerProfile)` | Cambio de ID observado o invalidación; player puede ser null. No indica cualquier cambio cosmético del perfil |
+| `capabilities_changed(capabilities: GEXTypes.Capabilities)` | Al inicializar y cambiar auth; recalcular acciones disponibles |
+| `save_conflict_detected(conflict: GEXTypes.SaveConflict)` | Conflicto detectado; conservar token solo durante la sesión actual |
+| `saved_game_modified(metadata: GEXTypes.SavedGameMetadata)` | Evento Apple de partida modificada; es metadato, no contenido descargado |
+| `native_ui_state_changed(state: GEXTypes.NativeUiState)` | Cambio observado de presentación/active/visible; no se emite cada 250 ms si nada cambia |
+| `interruption_changed(state: GEXTypes.InterruptionState)` | Estado/motivos de interrupción y tokens; procesar idempotentemente |
+| `native_activity_received(activity: GEXTypes.NativeActivity)` | Actividad Apple recibida; también queda en la cola hasta vaciarla |
+| `operation_completed(request_id: int, operation: String, status: GEXTypes.Status, error_code: String)` | Final de una operación que pasó por la cola; no incluye el payload |
+
+`operation_completed` no sustituye el retorno: los fallos de validación local y la inicialización no emiten este evento, y varias llamadas de autenticación agrupadas comparten una operación. `_auth_finished` es interna, no parte del contrato público.
+
+Ejemplo de registro sin datos personales ni pruebas:
 
 ```gdscript
-GameServices.set_pause_token("menu", true)
-# ...
-GameServices.set_pause_token("menu", false)
+func conectar_diagnostico() -> void:
+    GameServices.operation_completed.connect(_on_operation_completed)
+
+func _on_operation_completed(request_id: int, operation: String,
+        status: GEXTypes.Status, error_code: String) -> void:
+    print("#%d %s %s %s" % [
+        request_id, operation, GEXTypes.Status.keys()[status], error_code])
 ```
 
-Se preserva una pausa previa de SceneTree. No existe una API del motor para distinguir
-una asignación externa `paused=true` que ocurra cuando ya está pausado: usa tokens o
-el modo solo eventos si tu gestor escribe directamente `SceneTree.paused`.
-Foco, suspensión y presentación son motivos separados y deduplicados. La recuperación
-de foco no libera los demás. No hay timeout que fuerce reanudar gameplay.
+Para conectar una sola vez, hazlo desde un nodo con ciclo de vida controlado. No registres `proof`, códigos OAuth, firmas, bytes ni perfiles completos. [Códigos y recuperación](troubleshooting.md).
 
-Las actividades Apple entrantes se encolan (máximo 32) y se emiten como datos; el juego
-las recoge con `take_pending_activities`. No se cambia de escena. La aceptación nativa
-ya ocurre en el binding: no se ofrece rechazarla retroactivamente.

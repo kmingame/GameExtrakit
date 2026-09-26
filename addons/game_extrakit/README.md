@@ -1,17 +1,24 @@
 # GameExtrakit 0.1.0
 
-Servicios de juegos para Godot 4.7: `GameServices`, configuración en el editor,
-PGS Android, Game Center iOS, simulador e interrupciones.
+Servicios de juegos para **Godot 4.7** mediante el autoload `GameServices`: autenticación, perfil, identidad, amigos, logros, rankings, partidas, interfaces nativas e interrupciones. Incluye configuración en el editor y simulador en memoria.
 
-Activa el plugin, crea y guarda un Resource desde el dock **GameExtrakit**, configura
-las claves e IDs de catálogo y habilita la plataforma o simulación explícita.
+## Instalación rápida
 
-- [API](documentation/api.md)
-- [Instalación y exportación por plataforma](documentation/platforms.md)
-- [Cobertura de los 25 objetivos](documentation/coverage.md)
-- [Verificación de identidad](documentation/identity.md)
-- [Validación y trabajo pendiente en dispositivos](documentation/validation.md)
+1. Conserva esta carpeta en `res://addons/game_extrakit`.
+2. Activa **GameExtrakit** en Proyecto → Ajustes del proyecto → Plugins.
+3. Crea y guarda una configuración en el dock. Para escritorio activa **Mock Enabled**.
+4. Sigue el [ejemplo de inicio](documentation/getting-started.md) y comprueba los resultados de cada operación.
 
-Los binarios de terceros no están incluidos. La compatibilidad nativa en dispositivos
-requiere validación. En Android la confirmación de guardado es `UNKNOWN`, la resolución
-manual de conflictos es `UNSUPPORTED` y el estado de Sidekick es desconocido.
+Android/iOS requieren [dependencias oficiales externas](documentation/platforms.md). La ejecución local está comprobada en Godot 4.7 estable; la aceptación nativa y el backend real están [pendientes](documentation/validation.md). Android mantiene guardados `UNKNOWN`, resolución manual de conflictos `UNSUPPORTED` y visibilidad de Sidekick desconocida.
+
+## Manual
+
+- [Índice y recorridos](documentation/README.md).
+- [Configuración completa](documentation/configuration.md), [API y señales](documentation/api.md), [modelos y resultados](documentation/results.md).
+- [Servicios y ejemplos](documentation/services.md), [partidas/conflictos](documentation/cloud-save.md), [identidad/backend](documentation/identity.md).
+- [UI nativa/pausa](documentation/native-ui.md), [ciclo de vida](documentation/lifecycle.md).
+- [Simulador](documentation/simulator.md), [diagnóstico](documentation/troubleshooting.md), [cobertura](documentation/coverage.md).
+- [Validación](documentation/validation.md) y [desarrollo/empaquetado](documentation/development.md).
+
+Licencia [MIT](LICENSE). Consulta los [avisos de terceros](THIRD_PARTY_NOTICES.md) y las [versiones fijadas](dependencies.lock.json).
+
